@@ -4,8 +4,11 @@
 
 This is the official implementation of **RayMap3R**.
 
+### 🎉 Accepted by ECCV 2026
+
 [![Project Page](https://img.shields.io/badge/Project-Page-green)](https://raymap3r.github.io)
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-b31b1b)](https://arxiv.org/abs/2603.20588)
+[![ECCV 2026](https://img.shields.io/badge/ECCV-2026-7b2ff7)](https://raymap3r.github.io)
 
 </div>
 
@@ -14,6 +17,8 @@ This is the official implementation of **RayMap3R**.
 </div>
 
 <p align="center"><b>Streaming 3D Reconstruction for Dynamic Scenes.</b> Existing streaming methods such as CUT3R and TTT3R can suffer from camera drift caused by moving objects. RayMap3R identifies and suppresses dynamic regions at inference time without additional training or external models.</p>
+
+If you find this repository useful, please give it a star🌟 and consider citing our paper!
 
 ---
 
@@ -31,7 +36,6 @@ Streaming feed-forward 3D reconstruction enables real-time joint estimation of s
 - **State-Aware Smoothing** &mdash; Adaptively smooths trajectories using acceleration and state change magnitude as an uncertainty signal
 - **Real-time & Constant Memory** &mdash; Processes video streams with constant memory usage and real-time efficiency
 
-If you find this repository useful, please give it a star🌟 and consider citing our paper!
 
 
 ---
