@@ -92,9 +92,10 @@ If you find this work useful, please consider citing:
 
 ```bibtex
 @article{wang2026raymap3r,
-  title   = {RayMap3R: Inference-Time RayMap for Dynamic 3D Reconstruction},
-  author  = {Wang, Feiran and Shang, Zezhou and Liu, Gaowen and Yan, Yan},
-  year    = {2026}
+  title={RayMap3R: Inference-Time RayMap for Dynamic 3D Reconstruction},
+  author={Wang, Feiran and Shang, Zezhou and Liu, Gaowen and Yan, Yan},
+  journal={arXiv preprint arXiv:2603.20588},
+  year={2026}
 }
 ```
 
