@@ -8,7 +8,6 @@ This is the official implementation of **RayMap3R**.
 
 [![Project Page](https://img.shields.io/badge/Project-Page-green)](https://raymap3r.github.io)
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-b31b1b)](https://arxiv.org/abs/2603.20588)
-[![ECCV 2026](https://img.shields.io/badge/ECCV-2026-7b2ff7)](https://raymap3r.github.io)
 
 </div>
 
