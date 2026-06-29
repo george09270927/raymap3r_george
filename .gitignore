@@ -1,0 +1,23 @@
+# weights (download separately — see README)
+weights/*.pth
+weights/*.safetensors
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# build artifacts (CUDA extension)
+*.so
+src/croco/models/curope/build/
+
+# outputs / scratch
+results/
+output/
+*.ply
+*.glb
+*.log
+
+# os
+.DS_Store

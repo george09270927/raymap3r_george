@@ -4,7 +4,7 @@
 
 This is the official implementation of **RayMap3R**.
 
-### 🎉 Accepted by ECCV 2026
+### 🎉 Accepted by ECCV 2026 🎉 
 
 [![Project Page](https://img.shields.io/badge/Project-Page-green)](https://raymap3r.github.io)
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-b31b1b)](https://arxiv.org/abs/2603.20588)
@@ -75,13 +75,57 @@ Streaming feed-forward 3D reconstruction enables real-time joint estimation of s
 
 <p align="center">Comparison with CUT3R and TTT3R on dynamic DAVIS sequences. RayMap3R produces more coherent point clouds with fewer ghosting artifacts and reduced camera drift.</p>
 
-### Camera Pose Estimation
 
-<div align="center">
-<img src="asset/camera_pose.jpg" width="80%">
-</div>
+---
 
-<p align="center">Among streaming (online) methods, RayMap3R achieves the lowest ATE on all three pose benchmarks and the lowest Abs Rel on KITTI and Bonn.</p>
+## Getting Started
+
+### Installation
+
+```bash
+git clone https://github.com/Brack-Wang/raymap3r.git
+cd raymap3r
+
+# create an environment (Python 3.10, CUDA 12.1 tested)
+conda create -n raymap3r python=3.10 -y
+conda activate raymap3r
+
+# install PyTorch matching your CUDA, then the rest
+pip install torch==2.1.1 torchvision==0.16.1 --index-url https://download.pytorch.org/whl/cu121
+pip install -r requirements.txt
+
+# build the CroCo v2 RoPE CUDA extension (one time)
+cd src/croco/models/curope && python setup.py build_ext --inplace && cd -
+```
+
+### Weights
+
+RayMap3R is **training-free** and reuses the public CUT3R checkpoint. Download
+`cut3r_512_dpt_4_64.pth` from [CUT3R](https://github.com/CUT3R/CUT3R) and place it
+under `weights/`:
+
+```
+weights/cut3r_512_dpt_4_64.pth
+```
+
+### Run inference
+
+```bash
+python infer.py \
+    --frames_dir /path/to/frames \
+    --weights weights/cut3r_512_dpt_4_64.pth \
+    --output_dir ./output \
+    --size 512
+```
+
+Pass a directory of RGB frames (sorted lexicographically) to `--frames_dir`, or a
+video file to `--video`. Outputs (per-frame depth / confidence / color, camera
+intrinsics & poses, the camera trajectory, and a fused world point cloud `.ply`)
+are written to `--output_dir`. The run is headless (no viewer required).
+
+RayMap3R is fully automatic: during a short warm-up it measures camera rotation per
+sequence and selects the per-frame update rule and state-aware smoothing accordingly,
+then applies the dual-branch staticness gate (Sec. 3). No flags are needed.
 
 ---
 
@@ -102,7 +146,7 @@ If you find this work useful, please consider citing:
 
 ## Acknowledgements
 
-We thank the authors of [CUT3R](https://github.com/CUT3R/CUT3R) and [TTT3R](https://github.com/rover-xingyu/TTT3R) for their excellent work.
+We thank the authors of [CUT3R](https://github.com/CUT3R/CUT3R), [TTT3R](https://github.com/rover-xingyu/TTT3R) and [DUST3R](https://github.com/naver/dust3r) for their excellent work.
 
 ## License
 

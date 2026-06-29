@@ -1,0 +1,19 @@
+# RayMap3R inference requirements (tested configuration).
+# PyTorch with CUDA must match your system; install it first from https://pytorch.org.
+torch==2.1.1
+torchvision==0.16.1
+numpy==1.26.4
+einops==0.6.1
+transformers>=4.40.0
+huggingface-hub
+safetensors
+opencv-python
+pillow
+imageio
+imageio-ffmpeg
+scipy
+tqdm
+plyfile
+roma
+# The CroCo v2 RoPE CUDA extension (src/croco/models/curope) must be built once:
+#   cd src/croco/models/curope && python setup.py build_ext --inplace
