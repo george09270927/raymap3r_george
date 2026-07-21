@@ -4,7 +4,11 @@ torch==2.1.1
 torchvision==0.16.1
 numpy==1.26.4
 einops==0.6.1
-transformers>=4.40.0
+# transformers must stay <4.46: model.py imports transformers.file_utils (removed
+# later) and newest transformers requires torch>=2.4, incompatible with the 2.1.1 pin
+transformers==4.45.2
+# accelerate is imported by model.py/inference.py but was missing upstream
+accelerate==1.0.1
 huggingface-hub
 safetensors
 opencv-python
