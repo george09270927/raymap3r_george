@@ -15,8 +15,11 @@ RayMap3R (CUT3R fork, training-free) 上做 **instance-level scene-state mainten
 
 ## Machine
 
-- **MacBook 只做編輯與閱讀,不跑 inference。** Inference 需 CUDA(repo pins `torch==2.1.1 cu121`)、~10 GB VRAM。
-- 執行機器依 HANDOFF §0 選定後,把環境啟用指令與 SSH workflow 補到這一節。
+- **MacBook 只做編輯與閱讀,不跑 inference。** 跑 inference 用 **yoshi**(直連 `ssh yoshi`;RTX 4090 24GB,Ubuntu 22.04,CUDA toolkit `/usr/local/cuda-12.1`)。實測 VRAM ~8.3 GB @ 512 long-side。
+- yoshi 上 repo:`~/Warehouse/raymap3r_george`(5.5T 資料碟)。
+- 環境啟用:`source ~/miniconda3/etc/profile.d/conda.sh && conda activate raymap3r`(由 `scripts/setup_env_yoshi.sh` 建立;含 torch 2.1.1+cu121、transformers 4.45.2、accelerate、omegaconf、curope extension)。
+- Workflow:Mac 編輯 → commit + push → yoshi `git pull` → ssh 執行;runs 輸出在 yoshi `results/`(gitignored)。
+- 備援:zeldajr Slurm(quinn/rapunzel 3090);nano4 已開始收費,只有大規模 batch 才考慮(用前先讀官方 hackmd 與 OpenYOLO3D 的 `scripts/nchc/nano4.md`)。
 
 ## Boundaries — 絕對不做(HANDOFF §5)
 
@@ -38,7 +41,8 @@ RayMap3R (CUT3R fork, training-free) 上做 **instance-level scene-state mainten
 | `src/dust3r/model.py` 約 line 326-331 | gate 超參數預設值(alpha_gate_lambda=0.9, alpha_gate_wmin=0.15, alpha_ema_tau=5.0, coverage_adapt_k=0.5, small_step_c=0.5) |
 | `src/dust3r/model.py` line 4 | dev comment:gate 對 depth 較好、**對 pose 較差** — registration 吃 pose,要驗證 gate on/off 的 pose 品質 |
 | `infer.py` / `src/dust3r/inference.py` `inference_recurrent_lighter` | recurrent inference 主路徑;alpha_img 要從這裡 thread 出去存檔 |
-| `infer.py` `--model_update_type`(line 68-70) | **預設 `cut3r` = 無 gate baseline;`xattn` 才會開 alpha gate**(README quickstart 沒帶此 flag,照抄會跑 baseline)。gate on/off 對照就是這個 flag |
+| `infer.py` `--model_update_type` | **此 flag 在 recurrent 路徑上無效(2026-07-22 實測,兩值輸出 bit-identical)**:`forward_recurrent_lighter` 會重設它並交給內部 router 決定。gate A/B 要先做強制 regime 的小 patch |
+| `src/dust3r/model.py` rotation router(約 1664-1674, 1902-1909, 1958-1970) | ~20 frames warm-up 量 camera rotation,median < 2°/frame → `xattn`(gated),否則留 `cut3r`;每序列只決定一次。`res["alpha_img"]` 在約 line 1888 已放進 per-frame pred |
 | `infer.py` 輸出 | `depth/*.npy`, `conf/*.npy`, `color/*.png`, `camera/*.npz`, `poses_c2w.npy`, `trajectory.txt`, `pointcloud.ply`, `summary.json` |
 
 ## Weights

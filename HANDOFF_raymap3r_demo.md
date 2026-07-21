@@ -29,12 +29,18 @@ pip install -r requirements.txt
 Then run the official demo end-to-end on their sample input:
 ```bash
 # CORRECTED 2026-07-22 (verified against infer.py argparse; the original --input flag does not exist):
-python infer.py --video <clip.mp4> --output_dir results/smoke_test --model_update_type xattn
+python infer.py --video <clip.mp4> --output_dir results/smoke_test
 # --frames_dir <dir> for an image folder; --num_frames caps frames (default 30, 0 = all)
 ```
-**IMPORTANT: `--model_update_type` defaults to `cut3r` = NO-gate baseline.** `xattn` enables the
-attention + RayMap3R alpha gate — the README quickstart omits the flag, so copying it runs the
-baseline. This same flag is the gate on/off switch for the §3 pose-quality comparison.
+**`--model_update_type` has NO effect on this inference path (measured 2026-07-22, not just read):**
+the CLI writes `model.config.model_update_type`, but `forward_recurrent_lighter` (model.py ≈1674)
+resets it to `cut3r`, then an adaptive rotation router decides the regime ONCE per sequence after a
+~20-frame warm-up (median camera rotation < 2°/frame → `xattn` gated update, else stays `cut3r`;
+model.py ≈1902-1909). Running lady-running.mp4 with both flag values gave bit-identical
+depth/conf/poses (max|diff| = 0.0). ⇒ The §3 gate on/off A/B needs a small forced-regime patch
+(bypass/pin the router) — fold that into the Day-2 plumbing.
+Also confirmed: `res["alpha_img"]` is already attached to every frame's pred dict (model.py ≈1888),
+so the Day-2 dump is mostly a `save_results` change, not inference plumbing.
 
 `infer.py` is headless; outputs go to `--output_dir`: `depth/*.npy`, `conf/*.npy`, `color/*.png`, `camera/*.npz` (pose + intrinsics), `poses_c2w.npy`, `trajectory.txt` (TUM-style xyz), fused `pointcloud.ply`, `summary.json`.
 
@@ -71,7 +77,7 @@ Check in the alpha heatmaps:
 ✅ Go: both regimes produce a usable transient signal → proceed to Day 4.
 ❌ No-go: regime (b) silent or hopelessly noisy → escalate to George; fallback paths: (i) explicit registry-diff for unobserved regime (compare SAM2 instances vs registry on revisit), (ii) Pi3MOS-SLAM masks for observed regime only.
 
-Also log during Day 1–3: pose quality with gate on vs off. `model.py` line 4 has an honest dev comment: "works better than baseline model_ori on depth, **worse on pose**" — contradicts the paper's framing; our registration consumes poses, so verify. (Gate-off = `--model_update_type cut3r` (default) ≈ vanilla CUT3R; gate-on = `--model_update_type xattn`. Verified 2026-07-22 in `infer.py` — same run command, one flag.)
+Also log during Day 1–3: pose quality with gate on vs off. `model.py` line 4 has an honest dev comment: "works better than baseline model_ori on depth, **worse on pose**" — contradicts the paper's framing; our registration consumes poses, so verify. (Gate on/off is decided by the internal rotation router, NOT the CLI flag — see the §1 note (measured 2026-07-22: both flag values give bit-identical outputs). Forcing each regime for the A/B requires the small Day-2 router patch.)
 
 ## 4. Instances + registry (Day 4–5)
 

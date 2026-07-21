@@ -9,6 +9,8 @@ einops==0.6.1
 transformers==4.45.2
 # accelerate is imported by model.py/inference.py but was missing upstream
 accelerate==1.0.1
+# needed to unpickle the CUT3R checkpoint (its pickled config references omegaconf)
+omegaconf
 huggingface-hub
 safetensors
 opencv-python
