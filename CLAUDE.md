@@ -38,7 +38,8 @@ RayMap3R (CUT3R fork, training-free) 上做 **instance-level scene-state mainten
 | `src/dust3r/model.py` 約 line 326-331 | gate 超參數預設值(alpha_gate_lambda=0.9, alpha_gate_wmin=0.15, alpha_ema_tau=5.0, coverage_adapt_k=0.5, small_step_c=0.5) |
 | `src/dust3r/model.py` line 4 | dev comment:gate 對 depth 較好、**對 pose 較差** — registration 吃 pose,要驗證 gate on/off 的 pose 品質 |
 | `infer.py` / `src/dust3r/inference.py` `inference_recurrent_lighter` | recurrent inference 主路徑;alpha_img 要從這裡 thread 出去存檔 |
-| `infer.py` 輸出 | `depth/*.npy`, `conf/*.npy`, `camera/*.npz`, `poses_c2w.npy`, fused `.ply`, `summary.json` |
+| `infer.py` `--model_update_type`(line 68-70) | **預設 `cut3r` = 無 gate baseline;`xattn` 才會開 alpha gate**(README quickstart 沒帶此 flag,照抄會跑 baseline)。gate on/off 對照就是這個 flag |
+| `infer.py` 輸出 | `depth/*.npy`, `conf/*.npy`, `color/*.png`, `camera/*.npz`, `poses_c2w.npy`, `trajectory.txt`, `pointcloud.ply`, `summary.json` |
 
 ## Weights
 

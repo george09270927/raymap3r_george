@@ -28,9 +28,15 @@ pip install -r requirements.txt
 
 Then run the official demo end-to-end on their sample input:
 ```bash
-python infer.py --input <video_or_frames> --output_dir results/smoke_test
+# CORRECTED 2026-07-22 (verified against infer.py argparse; the original --input flag does not exist):
+python infer.py --video <clip.mp4> --output_dir results/smoke_test --model_update_type xattn
+# --frames_dir <dir> for an image folder; --num_frames caps frames (default 30, 0 = all)
 ```
-`infer.py` is headless; outputs go to `--output_dir`: `depth/*.npy`, `conf/*.npy`, `camera/*.npz` (pose + intrinsics), `poses_c2w.npy`, fused `.ply`, `summary.json`.
+**IMPORTANT: `--model_update_type` defaults to `cut3r` = NO-gate baseline.** `xattn` enables the
+attention + RayMap3R alpha gate — the README quickstart omits the flag, so copying it runs the
+baseline. This same flag is the gate on/off switch for the §3 pose-quality comparison.
+
+`infer.py` is headless; outputs go to `--output_dir`: `depth/*.npy`, `conf/*.npy`, `color/*.png`, `camera/*.npz` (pose + intrinsics), `poses_c2w.npy`, `trajectory.txt` (TUM-style xyz), fused `pointcloud.ply`, `summary.json`.
 
 ✅ Day-1 exit criterion: fused ply + per-frame depth/pose exist for the sample video. (This also validates the CUT3R inference path — the repo IS a CUT3R fork; `src/dust3r/model.py` = CUT3R "model_ori" + a static RayMap branch.)
 
@@ -65,7 +71,7 @@ Check in the alpha heatmaps:
 ✅ Go: both regimes produce a usable transient signal → proceed to Day 4.
 ❌ No-go: regime (b) silent or hopelessly noisy → escalate to George; fallback paths: (i) explicit registry-diff for unobserved regime (compare SAM2 instances vs registry on revisit), (ii) Pi3MOS-SLAM masks for observed regime only.
 
-Also log during Day 1–3: pose quality with gate on vs off. `model.py` line 4 has an honest dev comment: "works better than baseline model_ori on depth, **worse on pose**" — contradicts the paper's framing; our registration consumes poses, so verify. (Gate-off ≈ vanilla CUT3R; there's a fallback path when alpha gating is disabled.)
+Also log during Day 1–3: pose quality with gate on vs off. `model.py` line 4 has an honest dev comment: "works better than baseline model_ori on depth, **worse on pose**" — contradicts the paper's framing; our registration consumes poses, so verify. (Gate-off = `--model_update_type cut3r` (default) ≈ vanilla CUT3R; gate-on = `--model_update_type xattn`. Verified 2026-07-22 in `infer.py` — same run command, one flag.)
 
 ## 4. Instances + registry (Day 4–5)
 
