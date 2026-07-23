@@ -149,5 +149,21 @@ Question: our fusion video looks far worse than CUT3R's website demos. Two diagn
 - `results/<run>/showcase_stream_hq.mp4` for: lady_full_force_auto (busy cafe, hard mode),
   ex001 (static living-room pan — accumulation nearly clean), ex002 (kitchen, person ghosts
   x4 in accumulation), ex003 (4 sparse views, trivial), ex004 (walking woman — best showcase).
+- Renderer pacing iterations (user feedback): --content_substeps camera interpolation
+  (content 5 Hz, camera glides 10 fps), end orbit changed to ONE-WAY eased sweep (default
+  clockwise 30 deg), orbit entry morphs look-at/up from the follow view over the first 35%
+  (hard switch snapped visibly on short sequences).
+
+## 2026-07-24 — DAVIS sequences (paper's eval set)
+
+- Downloaded DAVIS-2017-trainval-480p to yoshi `data/davis/` (90 seqs).
+- Ran the four longest demo-relevant seqs, all `--force_update_type auto`
+  (`python infer.py --frames_dir data/davis/DAVIS/JPEGImages/480p/<seq> --output_dir
+  results/davis_<seq> --num_frames 0`): parkour 100f (router xattn, 0.93 deg/f),
+  camel 90f (xattn, 0.27), car-roundabout 75f (xattn, 0.69), dog 60f (xattn, 0.67).
+- Showcase videos (`--camera follow --display stream --stride 1 --size 960 --end_orbit 4`)
+  in `results/davis_<seq>/showcase_stream_hq.mp4`. camel is the most dramatic ghost-trail
+  demo (camel smears into a long ridge, 5.4M pts); car-roundabout shows a rigid mover
+  (red car) ghosting around the roundabout while parked cars stay sharp.
 - Implication for Day-3 phone videos: shoot with GENTLE camera motion (already in the
   shooting instructions); the Mode-1-vs-Mode-3 money shot depends on it.
