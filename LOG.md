@@ -119,8 +119,14 @@ Question: our fusion video looks far worse than CUT3R's website demos. Two diagn
 | 9 | Mode-1 accumulation, first 20 vs all 65 lady frames (inline render) | `/tmp/drift_check.png` | first 20 frames ALREADY equally smeared -> NOT long-horizon pose drift; the smear is ghosting from many moving people + fast tracking camera |
 | 10 | `python infer.py --frames_dir data/examples/004 --output_dir results/ex004_auto --num_frames 0 --force_update_type auto` (CUT3R examples/004, 70 frames, gentle camera) | `results/ex004_auto` | router: xattn, median_rot 0.43 deg/frame (vs lady 1.79). Mode-1 accumulation is SMOOTH and CUT3R-demo-like -> pipeline fine, lady-running is just hard content |
 
-- Additional finding from 004 (mostly static scene): alpha>=0.5 removes 78% of points
-  (2.0M -> 434k) — the absolute threshold is not scene-adaptive even on static scenes.
+- Additional finding from 004: alpha>=0.5 removes 78% of points (2.0M -> 434k). Correction
+  after the follow-cam render: 004 is NOT mostly static — a person walks toward the camera
+  (gentle camera + single mover). The filter removes her ghost trail correctly BUT also eats
+  much of the static furniture/floor — the absolute threshold over-filters statics.
   Reinforces: per-instance aggregation (Day 4) must use RELATIVE alpha statistics.
+- `make_fusion_video_o3d.py --camera follow` (new): CUT3R-demo-style flythrough riding behind
+  the estimated camera (EMA-smoothed). On 004 this view shows a textbook ghost trail in Mode 1
+  against a crisp static background -> 004 promoted to the showcase clip; outputs
+  `results/{ex004_auto,lady_full_force_auto}/fusion_m1_vs_m2_o3d_follow.mp4`.
 - Implication for Day-3 phone videos: shoot with GENTLE camera motion (already in the
   shooting instructions); the Mode-1-vs-Mode-3 money shot depends on it.
