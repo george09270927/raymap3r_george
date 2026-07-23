@@ -137,5 +137,17 @@ Question: our fusion video looks far worse than CUT3R's website demos. Two diagn
   demo: streaming is clean but memory-less; accumulation remembers but ghosts; the registry
   layer (Mode 3) = remember without ghosting.
   Output: `results/ex004_auto/fusion_m1_vs_m2_o3d_follow_stream.mp4`.
+
+## 2026-07-23 — Showcase videos for all five example scenes (HQ)
+
+- Downloaded remaining CUT3R examples 001 (13f) / 002 (15f) / 003 (4 sparse photos); ran
+  `infer.py --force_update_type auto` on each (router: null — sequences < 20-frame warm-up,
+  which also means no alpha gating was active for 001/002/003).
+- HQ settings for all five scenes: `--camera follow --display stream --stride 1 --size 960`
+  (full ~147k pts/frame; quality ceiling is the model's 512x288 depth resolution).
+  ~42 s per 70-frame scene on yoshi.
+- `results/<run>/showcase_stream_hq.mp4` for: lady_full_force_auto (busy cafe, hard mode),
+  ex001 (static living-room pan — accumulation nearly clean), ex002 (kitchen, person ghosts
+  x4 in accumulation), ex003 (4 sparse views, trivial), ex004 (walking woman — best showcase).
 - Implication for Day-3 phone videos: shoot with GENTLE camera motion (already in the
   shooting instructions); the Mode-1-vs-Mode-3 money shot depends on it.
