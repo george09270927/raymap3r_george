@@ -21,5 +21,8 @@ scipy
 tqdm
 plyfile
 roma
+# visualization only (scripts/): headless rendering + plots
+matplotlib
+open3d
 # The CroCo v2 RoPE CUDA extension (src/croco/models/curope) must be built once:
 #   cd src/croco/models/curope && python setup.py build_ext --inplace

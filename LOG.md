@@ -101,3 +101,11 @@ Sanity: `torch 2.1.1+cu121 | cuda: True | NVIDIA GeForce RTX 4090`; checkpoint `
   re-inference). Output: `results/lady_full_force_auto/fusion_m1_vs_m2.mp4` — ghost trail
   visibly forms on the left while the right stays clean (final frame: 325k vs 47k pts;
   alpha also trims depth-uncertain regions, so Mode 2 is sparser overall, not only de-ghosted).
+- `scripts/make_fusion_video_o3d.py` (new, preferred): same story rendered with open3d EGL
+  OffscreenRenderer — full-density points (stride 2, ~37k pts/frame, 2.2M final), perspective
+  camera, camera-trajectory polyline. Default right-side 3/4 viewpoint chosen from a 4-view scan.
+  Output: `results/lady_full_force_auto/fusion_m1_vs_m2_o3d.mp4` (+ `_final.png`).
+  Context: CUT3R's pretty demo videos are recordings of their interactive viser WebGL viewer
+  showing per-frame streaming (no naive accumulation) — the visual gap vs our first matplotlib
+  attempt was rendering tech (sparse scatter), not the reconstruction. open3d + matplotlib added
+  to requirements.txt as viz-only deps; open3d 0.19 EGL headless verified on yoshi.
