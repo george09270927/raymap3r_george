@@ -49,11 +49,16 @@ def parse_args():
                    help="follow mode: EMA weight for the new pose (lower = smoother).")
     p.add_argument("--end_orbit", type=float, default=0.0,
                    help="Append an orbit sweep around the final cloud lasting this many "
-                        "seconds (0 = off). Starts and ends at the last viewpoint.")
-    p.add_argument("--orbit_sweep_deg", type=float, default=80.0,
-                   help="Total sinusoidal swing of the end orbit (+-half). Single-view room "
-                        "scans are one-sided shells, so a full 360 shows wall backsides; "
-                        "a gentle swing stays on the good side. Set 360 for a full circle.")
+                        "seconds (0 = off). One-way ease-in-out sweep starting at the last "
+                        "viewpoint and STOPPING at the swept angle (no back-and-forth).")
+    p.add_argument("--orbit_sweep_deg", type=float, default=60.0,
+                   help="One-way sweep angle of the end orbit; negative flips direction. "
+                        "Single-view scans are one-sided shells, so keep it modest "
+                        "(full 360 shows wall backsides; set 360 explicitly if wanted).")
+    p.add_argument("--content_substeps", type=int, default=2,
+                   help="follow mode: render k camera sub-steps between reconstruction "
+                        "frames (content advances every k-th video frame, camera glides "
+                        "every frame). Slows perceived pace smoothly. 1 = off.")
     p.add_argument("--out", type=str, default=None)
     return p.parse_args()
 
@@ -154,6 +159,12 @@ def main():
             ema_up = (1 - b) * ema_up + b * upv
         return ema_ctr, ema_eye, ema_up / np.linalg.norm(ema_up)
 
+    # precompute per-frame camera views (follow mode carries EMA state, so one pass)
+    n_rec = len(per_frame)
+    views = [follow_view(t) if args.camera == "follow" else (center, eye, up)
+             for t in range(n_rec)]
+    sub = max(1, args.content_substeps) if args.camera == "follow" else 1
+
     writer = iio.get_writer(out, fps=args.fps, codec="libx264", quality=8)
     acc_p, acc_c, acc_s = [], [], []
     for t, (pts, cols, s) in enumerate(per_frame):
@@ -161,28 +172,34 @@ def main():
         P = np.concatenate(acc_p, 0); C = np.concatenate(acc_c, 0)
         S = np.concatenate(acc_s, 0)
         traj = poses_c2w[:t + 1, :3, 3]
-        view = follow_view(t) if args.camera == "follow" else (center, eye, up)
+        v0, v1 = views[t], views[min(t + 1, n_rec - 1)]
 
-        if args.display == "stream":
-            # left: CUT3R-website style (only the current frame visible);
-            # right: what naive persistence of the same stream looks like
-            left = render_panel(pts, cols, traj, view)
-            right = render_panel(P, C, traj, view)
-            l_label = f"Streaming, current frame only (CUT3R-style)  f{t:03d}"
-            r_label = f"Naive accumulation  {len(P):,} pts"
-        else:
-            left = render_panel(P, C, traj, view)
-            right = render_panel(P[S], C[S], traj, view)
-            l_label = f"Mode 1: accumulated  f{t:03d}  {len(P):,} pts"
-            r_label = f"Mode 2: alpha>={args.alpha_thr}  {int(S.sum()):,} pts"
-        frame = np.concatenate([left, right], axis=1)
-        cv2.putText(frame, l_label, (10, 28),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (20, 20, 20), 2, cv2.LINE_AA)
-        cv2.putText(frame, r_label,
-                    (args.size + 10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (20, 20, 20), 2,
-                    cv2.LINE_AA)
-        writer.append_data(frame)
-        if t == len(per_frame) - 1:
+        for j in range(sub):
+            w = j / float(sub)
+            v_up = (1 - w) * v0[2] + w * v1[2]
+            view = ((1 - w) * v0[0] + w * v1[0],
+                    (1 - w) * v0[1] + w * v1[1],
+                    v_up / np.linalg.norm(v_up))
+            if args.display == "stream":
+                # left: CUT3R-website style (only the current frame visible);
+                # right: what naive persistence of the same stream looks like
+                left = render_panel(pts, cols, traj, view)
+                right = render_panel(P, C, traj, view)
+                l_label = f"Streaming, current frame only (CUT3R-style)  f{t:03d}"
+                r_label = f"Naive accumulation  {len(P):,} pts"
+            else:
+                left = render_panel(P, C, traj, view)
+                right = render_panel(P[S], C[S], traj, view)
+                l_label = f"Mode 1: accumulated  f{t:03d}  {len(P):,} pts"
+                r_label = f"Mode 2: alpha>={args.alpha_thr}  {int(S.sum()):,} pts"
+            frame = np.concatenate([left, right], axis=1)
+            cv2.putText(frame, l_label, (10, 28),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (20, 20, 20), 2, cv2.LINE_AA)
+            cv2.putText(frame, r_label,
+                        (args.size + 10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (20, 20, 20), 2,
+                        cv2.LINE_AA)
+            writer.append_data(frame)
+        if t == n_rec - 1:
             iio.imwrite(os.path.splitext(out)[0] + "_final.png", frame)
 
     if args.end_orbit > 0:
@@ -194,11 +211,12 @@ def main():
         a0 = float(np.arctan2(rel[0], rel[2]))
         n_orbit = max(int(args.end_orbit * args.fps), 1)
         for k in range(n_orbit + 1):
-            if args.orbit_sweep_deg >= 360.0:
+            if abs(args.orbit_sweep_deg) >= 360.0:
                 a = a0 + 2.0 * np.pi * k / n_orbit
             else:
-                a = a0 + np.radians(args.orbit_sweep_deg / 2.0) * \
-                    np.sin(2.0 * np.pi * k / n_orbit)
+                x = k / float(n_orbit)
+                ease = x * x * (3.0 - 2.0 * x)  # smoothstep: one-way, ease in/out
+                a = a0 + np.radians(args.orbit_sweep_deg) * ease
             o_eye = center + np.array([r_xz * np.sin(a), h, r_xz * np.cos(a)])
             o_view = (center, o_eye, np.array([0.0, -1.0, 0.0]))
             if args.display == "stream":
