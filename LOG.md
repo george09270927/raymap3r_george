@@ -96,3 +96,8 @@ Sanity: `torch 2.1.1+cu121 | cuda: True | NVIDIA GeForce RTX 4090`; checkpoint `
   distribution is wide, so thr 0.5 is NOT degenerate — it keeps 1.09M points and visually removes
   most of the runner's ghost trail while preserving floor/walls; 0.25 keeps a partial trail.
 - Day-2 sanity pair: `results/lady_full_force_auto/compare_m1_m2.png` (Mode 1 vs 0.5 vs 0.25).
+- `scripts/make_fusion_video.py` (new): temporal-accumulation video, Mode 1 vs Mode 2 side by
+  side from the fixed viewpoint, rebuilt offline from saved depth/camera/color/alpha (no
+  re-inference). Output: `results/lady_full_force_auto/fusion_m1_vs_m2.mp4` — ghost trail
+  visibly forms on the left while the right stays clean (final frame: 325k vs 47k pts;
+  alpha also trims depth-uncertain regions, so Mode 2 is sparser overall, not only de-ghosted).
