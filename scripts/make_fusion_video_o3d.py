@@ -51,10 +51,10 @@ def parse_args():
                    help="Append an orbit sweep around the final cloud lasting this many "
                         "seconds (0 = off). One-way ease-in-out sweep starting at the last "
                         "viewpoint and STOPPING at the swept angle (no back-and-forth).")
-    p.add_argument("--orbit_sweep_deg", type=float, default=60.0,
-                   help="One-way sweep angle of the end orbit; negative flips direction. "
-                        "Single-view scans are one-sided shells, so keep it modest "
-                        "(full 360 shows wall backsides; set 360 explicitly if wanted).")
+    p.add_argument("--orbit_sweep_deg", type=float, default=-30.0,
+                   help="One-way sweep angle of the end orbit (negative = clockwise on "
+                        "screen, the default). Single-view scans are one-sided shells, so "
+                        "keep it modest (set 360 explicitly for a full circle).")
     p.add_argument("--content_substeps", type=int, default=2,
                    help="follow mode: render k camera sub-steps between reconstruction "
                         "frames (content advances every k-th video frame, camera glides "
@@ -203,22 +203,29 @@ def main():
             iio.imwrite(os.path.splitext(out)[0] + "_final.png", frame)
 
     if args.end_orbit > 0:
-        # 360-degree orbit of the FINAL state, rotating about the world vertical
-        # (-y) axis through the scene center, starting at the last viewpoint
-        v_ctr, v_eye, _ = view
+        # Orbit of the FINAL state about the world vertical (-y) axis through the scene
+        # center, starting at the last viewpoint. The look-at target and up vector MORPH
+        # from the follow view into (center, world-up) over the first 35% of the sweep --
+        # a hard switch visibly snaps on short sequences where they differ a lot.
+        v_ctr, v_eye, v_upl = view
         rel = v_eye - center
         r_xz, h = float(np.hypot(rel[0], rel[2])), float(rel[1])
         a0 = float(np.arctan2(rel[0], rel[2]))
+        world_up = np.array([0.0, -1.0, 0.0])
         n_orbit = max(int(args.end_orbit * args.fps), 1)
         for k in range(n_orbit + 1):
+            x = k / float(n_orbit)
             if abs(args.orbit_sweep_deg) >= 360.0:
-                a = a0 + 2.0 * np.pi * k / n_orbit
+                a = a0 + 2.0 * np.pi * x
             else:
-                x = k / float(n_orbit)
                 ease = x * x * (3.0 - 2.0 * x)  # smoothstep: one-way, ease in/out
                 a = a0 + np.radians(args.orbit_sweep_deg) * ease
             o_eye = center + np.array([r_xz * np.sin(a), h, r_xz * np.cos(a)])
-            o_view = (center, o_eye, np.array([0.0, -1.0, 0.0]))
+            m = min(x / 0.35, 1.0)
+            ms = m * m * (3.0 - 2.0 * m)
+            o_ctr = (1.0 - ms) * v_ctr + ms * center
+            o_up = (1.0 - ms) * v_upl + ms * world_up
+            o_view = (o_ctr, o_eye, o_up / np.linalg.norm(o_up))
             if args.display == "stream":
                 l_img = render_panel(pts, cols, traj, o_view)
                 r_img = render_panel(P, C, traj, o_view)
