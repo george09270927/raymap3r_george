@@ -47,6 +47,13 @@ def parse_args():
                    help="follow mode: height above the camera (fraction of scene extent).")
     p.add_argument("--follow_smooth", type=float, default=0.25,
                    help="follow mode: EMA weight for the new pose (lower = smoother).")
+    p.add_argument("--end_orbit", type=float, default=0.0,
+                   help="Append an orbit sweep around the final cloud lasting this many "
+                        "seconds (0 = off). Starts and ends at the last viewpoint.")
+    p.add_argument("--orbit_sweep_deg", type=float, default=80.0,
+                   help="Total sinusoidal swing of the end orbit (+-half). Single-view room "
+                        "scans are one-sided shells, so a full 360 shows wall backsides; "
+                        "a gentle swing stays on the good side. Set 360 for a full circle.")
     p.add_argument("--out", type=str, default=None)
     return p.parse_args()
 
@@ -177,6 +184,33 @@ def main():
         writer.append_data(frame)
         if t == len(per_frame) - 1:
             iio.imwrite(os.path.splitext(out)[0] + "_final.png", frame)
+
+    if args.end_orbit > 0:
+        # 360-degree orbit of the FINAL state, rotating about the world vertical
+        # (-y) axis through the scene center, starting at the last viewpoint
+        v_ctr, v_eye, _ = view
+        rel = v_eye - center
+        r_xz, h = float(np.hypot(rel[0], rel[2])), float(rel[1])
+        a0 = float(np.arctan2(rel[0], rel[2]))
+        n_orbit = max(int(args.end_orbit * args.fps), 1)
+        for k in range(n_orbit + 1):
+            if args.orbit_sweep_deg >= 360.0:
+                a = a0 + 2.0 * np.pi * k / n_orbit
+            else:
+                a = a0 + np.radians(args.orbit_sweep_deg / 2.0) * \
+                    np.sin(2.0 * np.pi * k / n_orbit)
+            o_eye = center + np.array([r_xz * np.sin(a), h, r_xz * np.cos(a)])
+            o_view = (center, o_eye, np.array([0.0, -1.0, 0.0]))
+            if args.display == "stream":
+                l_img = render_panel(pts, cols, traj, o_view)
+                r_img = render_panel(P, C, traj, o_view)
+            else:
+                l_img = render_panel(P, C, traj, o_view)
+                r_img = render_panel(P[S], C[S], traj, o_view)
+            frame = np.concatenate([l_img, r_img], axis=1)
+            cv2.putText(frame, "orbit (final state)", (10, 28),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (20, 20, 20), 2, cv2.LINE_AA)
+            writer.append_data(frame)
     writer.close()
     print(f"[fusion-o3d] {len(per_frame)} frames -> {out}")
 
