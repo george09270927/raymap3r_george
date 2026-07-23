@@ -109,3 +109,18 @@ Sanity: `torch 2.1.1+cu121 | cuda: True | NVIDIA GeForce RTX 4090`; checkpoint `
   showing per-frame streaming (no naive accumulation) — the visual gap vs our first matplotlib
   attempt was rendering tech (sparse scatter), not the reconstruction. open3d + matplotlib added
   to requirements.txt as viz-only deps; open3d 0.19 EGL headless verified on yoshi.
+
+## 2026-07-23 — Why lady-running fusion looks bad: content, not pipeline
+
+Question: our fusion video looks far worse than CUT3R's website demos. Two diagnostics:
+
+| # | command | output dir | result |
+|---|---------|-----------|--------|
+| 9 | Mode-1 accumulation, first 20 vs all 65 lady frames (inline render) | `/tmp/drift_check.png` | first 20 frames ALREADY equally smeared -> NOT long-horizon pose drift; the smear is ghosting from many moving people + fast tracking camera |
+| 10 | `python infer.py --frames_dir data/examples/004 --output_dir results/ex004_auto --num_frames 0 --force_update_type auto` (CUT3R examples/004, 70 frames, gentle camera) | `results/ex004_auto` | router: xattn, median_rot 0.43 deg/frame (vs lady 1.79). Mode-1 accumulation is SMOOTH and CUT3R-demo-like -> pipeline fine, lady-running is just hard content |
+
+- Additional finding from 004 (mostly static scene): alpha>=0.5 removes 78% of points
+  (2.0M -> 434k) — the absolute threshold is not scene-adaptive even on static scenes.
+  Reinforces: per-instance aggregation (Day 4) must use RELATIVE alpha statistics.
+- Implication for Day-3 phone videos: shoot with GENTLE camera motion (already in the
+  shooting instructions); the Mode-1-vs-Mode-3 money shot depends on it.
