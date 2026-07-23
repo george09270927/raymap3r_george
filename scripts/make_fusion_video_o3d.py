@@ -33,6 +33,15 @@ def parse_args():
                    help="Camera eye = scene_center + offset*extent (x,y,z fractions). "
                         "Default is a right-side 3/4 view chosen on lady-running "
                         "(CUT3R worlds are y-down z-forward).")
+    p.add_argument("--camera", type=str, default="fixed", choices=["fixed", "follow"],
+                   help="fixed = one viewpoint for the whole video (honest §7 comparisons); "
+                        "follow = CUT3R-demo-style flythrough riding behind the estimated camera.")
+    p.add_argument("--follow_back", type=float, default=0.35,
+                   help="follow mode: distance behind the camera (fraction of scene extent).")
+    p.add_argument("--follow_up", type=float, default=0.15,
+                   help="follow mode: height above the camera (fraction of scene extent).")
+    p.add_argument("--follow_smooth", type=float, default=0.25,
+                   help="follow mode: EMA weight for the new pose (lower = smoother).")
     p.add_argument("--out", type=str, default=None)
     return p.parse_args()
 
@@ -58,7 +67,8 @@ def make_pcd(pts, cols):
 def main():
     args = parse_args()
     rd = args.run_dir
-    out = args.out or os.path.join(rd, "fusion_m1_vs_m2_o3d.mp4")
+    suffix = "_follow" if args.camera == "follow" else ""
+    out = args.out or os.path.join(rd, f"fusion_m1_vs_m2_o3d{suffix}.mp4")
     depth_paths = sorted(glob.glob(os.path.join(rd, "depth", "*.npy")))
     if not depth_paths:
         raise SystemExit(f"No depth maps in {rd}/depth")
@@ -98,7 +108,8 @@ def main():
     line_mat.shader = "unlitLine"
     line_mat.line_width = 3.0
 
-    def render_panel(pts, cols, traj):
+    def render_panel(pts, cols, traj, view):
+        v_ctr, v_eye, v_up = view
         renderer.scene.clear_geometry()
         renderer.scene.add_geometry("pc", make_pcd(pts, cols), mat)
         if len(traj) >= 2:
@@ -108,9 +119,27 @@ def main():
                 np.stack([np.arange(len(traj) - 1), np.arange(1, len(traj))], 1))
             ls.paint_uniform_color([1.0, 0.1, 0.1])
             renderer.scene.add_geometry("traj", ls, line_mat)
-        renderer.setup_camera(args.fov, center.astype(np.float32),
-                              eye.astype(np.float32), up.astype(np.float32))
+        renderer.setup_camera(args.fov, v_ctr.astype(np.float32),
+                              v_eye.astype(np.float32), v_up.astype(np.float32))
         return np.asarray(renderer.render_to_image())
+
+    # follow mode: ride behind the estimated camera, EMA-smoothed to avoid jitter
+    ema_eye, ema_ctr, ema_up = None, None, None
+
+    def follow_view(t):
+        nonlocal ema_eye, ema_ctr, ema_up
+        c2w = poses_c2w[t]
+        pos, fwd, upv = c2w[:3, 3], c2w[:3, 2], -c2w[:3, 1]
+        raw_eye = pos - fwd * (args.follow_back * ext) + upv * (args.follow_up * ext)
+        raw_ctr = pos + fwd * (0.6 * ext)
+        b = args.follow_smooth
+        if ema_eye is None:
+            ema_eye, ema_ctr, ema_up = raw_eye, raw_ctr, upv
+        else:
+            ema_eye = (1 - b) * ema_eye + b * raw_eye
+            ema_ctr = (1 - b) * ema_ctr + b * raw_ctr
+            ema_up = (1 - b) * ema_up + b * upv
+        return ema_ctr, ema_eye, ema_up / np.linalg.norm(ema_up)
 
     writer = iio.get_writer(out, fps=args.fps, codec="libx264", quality=8)
     acc_p, acc_c, acc_s = [], [], []
@@ -119,9 +148,10 @@ def main():
         P = np.concatenate(acc_p, 0); C = np.concatenate(acc_c, 0)
         S = np.concatenate(acc_s, 0)
         traj = poses_c2w[:t + 1, :3, 3]
+        view = follow_view(t) if args.camera == "follow" else (center, eye, up)
 
-        left = render_panel(P, C, traj)
-        right = render_panel(P[S], C[S], traj)
+        left = render_panel(P, C, traj, view)
+        right = render_panel(P[S], C[S], traj, view)
         frame = np.concatenate([left, right], axis=1)
         cv2.putText(frame, f"Mode 1: accumulated  f{t:03d}  {len(P):,} pts", (10, 28),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (20, 20, 20), 2, cv2.LINE_AA)
