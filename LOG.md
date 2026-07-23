@@ -128,5 +128,14 @@ Question: our fusion video looks far worse than CUT3R's website demos. Two diagn
   the estimated camera (EMA-smoothed). On 004 this view shows a textbook ghost trail in Mode 1
   against a crisp static background -> 004 promoted to the showcase clip; outputs
   `results/{ex004_auto,lady_full_force_auto}/fusion_m1_vs_m2_o3d_follow.mp4`.
+- CONFIRMED how CUT3R's website "Dynamic Scene Reconstruction" videos work
+  (CUT3R repo `viser_utils.py:735-736`): per-frame point clouds are separate viser nodes and
+  playback toggles node VISIBILITY — only the current frame is ever shown. No accumulation,
+  hence no ghosts. Their demos never attempt persistence.
+- `make_fusion_video_o3d.py --display stream` (new): replicates that look. In stream mode the
+  panel pair is [streaming current-frame | naive accumulation] — the motivation shot for our
+  demo: streaming is clean but memory-less; accumulation remembers but ghosts; the registry
+  layer (Mode 3) = remember without ghosting.
+  Output: `results/ex004_auto/fusion_m1_vs_m2_o3d_follow_stream.mp4`.
 - Implication for Day-3 phone videos: shoot with GENTLE camera motion (already in the
   shooting instructions); the Mode-1-vs-Mode-3 money shot depends on it.

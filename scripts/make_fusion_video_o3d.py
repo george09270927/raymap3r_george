@@ -36,6 +36,11 @@ def parse_args():
     p.add_argument("--camera", type=str, default="fixed", choices=["fixed", "follow"],
                    help="fixed = one viewpoint for the whole video (honest §7 comparisons); "
                         "follow = CUT3R-demo-style flythrough riding behind the estimated camera.")
+    p.add_argument("--display", type=str, default="accumulate",
+                   choices=["accumulate", "stream"],
+                   help="accumulate = naive union of all frames so far (ghost trail forms); "
+                        "stream = CUT3R-website style, only the CURRENT frame's points visible "
+                        "(their viser playback toggles per-frame node visibility).")
     p.add_argument("--follow_back", type=float, default=0.35,
                    help="follow mode: distance behind the camera (fraction of scene extent).")
     p.add_argument("--follow_up", type=float, default=0.15,
@@ -67,7 +72,8 @@ def make_pcd(pts, cols):
 def main():
     args = parse_args()
     rd = args.run_dir
-    suffix = "_follow" if args.camera == "follow" else ""
+    suffix = ("_follow" if args.camera == "follow" else "") + \
+             ("_stream" if args.display == "stream" else "")
     out = args.out or os.path.join(rd, f"fusion_m1_vs_m2_o3d{suffix}.mp4")
     depth_paths = sorted(glob.glob(os.path.join(rd, "depth", "*.npy")))
     if not depth_paths:
@@ -150,12 +156,22 @@ def main():
         traj = poses_c2w[:t + 1, :3, 3]
         view = follow_view(t) if args.camera == "follow" else (center, eye, up)
 
-        left = render_panel(P, C, traj, view)
-        right = render_panel(P[S], C[S], traj, view)
+        if args.display == "stream":
+            # left: CUT3R-website style (only the current frame visible);
+            # right: what naive persistence of the same stream looks like
+            left = render_panel(pts, cols, traj, view)
+            right = render_panel(P, C, traj, view)
+            l_label = f"Streaming, current frame only (CUT3R-style)  f{t:03d}"
+            r_label = f"Naive accumulation  {len(P):,} pts"
+        else:
+            left = render_panel(P, C, traj, view)
+            right = render_panel(P[S], C[S], traj, view)
+            l_label = f"Mode 1: accumulated  f{t:03d}  {len(P):,} pts"
+            r_label = f"Mode 2: alpha>={args.alpha_thr}  {int(S.sum()):,} pts"
         frame = np.concatenate([left, right], axis=1)
-        cv2.putText(frame, f"Mode 1: accumulated  f{t:03d}  {len(P):,} pts", (10, 28),
+        cv2.putText(frame, l_label, (10, 28),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (20, 20, 20), 2, cv2.LINE_AA)
-        cv2.putText(frame, f"Mode 2: alpha>={args.alpha_thr}  {int(S.sum()):,} pts",
+        cv2.putText(frame, r_label,
                     (args.size + 10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (20, 20, 20), 2,
                     cv2.LINE_AA)
         writer.append_data(frame)
