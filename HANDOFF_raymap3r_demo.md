@@ -106,3 +106,29 @@ Also log during Day 1–3: pose quality with gate on vs off. `model.py` line 4 h
 - The demo's conceptual split: CUT3R = "where things are", RayMap3R alpha = "what changed/moves", SAM2 = "which object is which"; the registry + registration layer is OUR code and the only novel part of the demo.
 - Known failure modes to watch: SAM2 identity switches after occlusion; metric-scale drift on long sequences (keep clips < 1–2 min); large dynamic coverage degrading pose (gate has coverage adaptation but verify).
 - If a question needs paper-level detail (Khronos, O-SCD, Pi3MOS-SLAM, competitive landscape), defer to George — full readouts live in his Notion / claude.ai project.
+
+## 7. Visualization modes
+
+Two rendering modes of the same reconstruction tell different stories; build both — the contrast IS the demo.
+
+- **Mode 1 — Accumulated fusion (problem view).** What `infer.py` already outputs
+  (`pointcloud.ply`: all frames' points concatenated, confidence-filtered only). A moving object
+  leaves a ghost trail — the visual symptom of "no instance-level state". Keep as-is; this is the
+  baseline visual.
+- **Mode 2 — Alpha-filtered fusion (Day 2, ~1 line).** In `save_results`, also write
+  `pointcloud_static.ply` dropping per-frame points whose `alpha_img` < threshold (start 0.5, try
+  0.3/0.7). Keep the existing confidence filter; alpha is an ADDITIONAL condition. Purpose:
+  sanity-check the exposed alpha + first "gate on/off" visual.
+  *Caveat from the Day-2 measurement:* raw alpha sits in a narrow high-staticness band
+  (`1-alpha` ≈ 0.71–0.78 on lady-running), so absolute thresholds need care — sweep them, or use
+  per-frame percentiles of `1-alpha` instead of a fixed cut.
+- **Mode 3 — Registry rendering (Day 4–5, money shot).** Static background = alpha-filtered
+  cloud; each dynamic instance drawn ONCE at its current registry pose (apply the estimated
+  Δpose to the stored instance points); optionally a faint bbox/arrow at the old pose showing
+  "moved A → B".
+
+Deliverables: side-by-side **Mode 1 vs Mode 3** on the same clip (left: ghost trail = what
+existing tools give; right: one object at its updated pose = what our layer adds), plus
+**Mode 1 vs Mode 2** as the Day-2 sanity pair. Use ONE fixed camera viewpoint across all modes so
+comparisons are honest. Headless rendering only (open3d offscreen or matplotlib 3D scatter);
+no interactive viewers this week.

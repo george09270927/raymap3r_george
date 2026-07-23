@@ -77,3 +77,22 @@ Sanity: `torch 2.1.1+cu121 | cuda: True | NVIDIA GeForce RTX 4090`; checkpoint `
 - Videos: `results/lady_full_force_auto/alpha_heatmap.mp4` (raw) and `alpha_heatmap_norm.mp4`
   (normalized; recommended for eyeballing).
 - **Day-2 exit criterion MET** (normalized heatmap is a plausible motion map).
+
+## 2026-07-22 — Day 2 (cont.): HANDOFF §7 + Mode-2 static fusion
+
+- HANDOFF gains §7 "Visualization modes" (Mode 1 accumulated / Mode 2 alpha-filtered /
+  Mode 3 registry rendering; one fixed viewpoint across modes; headless only).
+- `infer.py` now also writes `pointcloud_static.ply`: confidence filter AND
+  `alpha >= --alpha_static_thr` (default 0.5; warm-up frames contribute confidence-only).
+- `scripts/render_ply_compare.py` (new): fixed-viewpoint headless side-by-side ply renderer
+  (default elev=-150 azim=-90 suits CUT3R y-down worlds; viewpoint scanned and chosen on Day 2).
+
+| # | command | output dir | result |
+|---|---------|-----------|--------|
+| 7 | run 4 rerun (gains static ply, thr 0.5) | `results/lady_full_force_auto` | static 1,086,922 pts vs Mode-1 2.0M cap |
+| 8 | same with `--alpha_static_thr 0.25` | `results/lady_m2_thr025` | static hits 2.0M cap |
+
+- Threshold reality check (measured): per-frame MEAN alpha is only ~0.25, but the per-pixel
+  distribution is wide, so thr 0.5 is NOT degenerate — it keeps 1.09M points and visually removes
+  most of the runner's ghost trail while preserving floor/walls; 0.25 keeps a partial trail.
+- Day-2 sanity pair: `results/lady_full_force_auto/compare_m1_m2.png` (Mode 1 vs 0.5 vs 0.25).

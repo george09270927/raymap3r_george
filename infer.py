@@ -84,6 +84,11 @@ def parse_args():
                    help="Confidence threshold for points written to the fused .ply.")
     p.add_argument("--max_ply_points", type=int, default=2_000_000,
                    help="Random-subsample the fused point cloud to at most this many points.")
+    # [george] Mode-2 static fusion (HANDOFF §7)
+    p.add_argument("--alpha_static_thr", type=float, default=0.5,
+                   help="pointcloud_static.ply drops points with alpha < thr (on top of the "
+                        "confidence filter). Raw alpha is low/narrow-banded (mean ~0.25 on "
+                        "lady-running) - sweep e.g. 0.2/0.3/0.5.")
     return p.parse_args()
 
 
@@ -148,7 +153,7 @@ def build_views(img_paths, size, reset_interval):
     return views
 
 
-def save_results(outputs, outdir, conf_thr, max_ply_points):
+def save_results(outputs, outdir, conf_thr, max_ply_points, alpha_static_thr=0.5):
     """Serialize per-frame depth/conf/color/camera + trajectory + fused point cloud."""
     import imageio.v2 as iio
     from src.dust3r.utils.camera import pose_encoding_to_camera
@@ -175,6 +180,7 @@ def save_results(outputs, outdir, conf_thr, max_ply_points):
 
     poses_c2w = np.stack([poses[i][0].numpy() for i in range(n)], 0)  # (N,4,4)
     all_pts, all_cols = [], []
+    all_pts_static, all_cols_static = [], []  # [george] Mode-2 alpha-filtered fusion
     for i in range(n):
         depth = pts_self[i, ..., 2].numpy()
         conf = conf_self[i].numpy()
@@ -197,6 +203,14 @@ def save_results(outputs, outdir, conf_thr, max_ply_points):
         m = (conf.reshape(-1) > conf_thr)
         all_pts.append(world[m])
         all_cols.append((color.reshape(-1, 3)[m] * 255).astype(np.uint8))
+        # [george] Mode-2 (HANDOFF §7): additionally require alpha >= thr;
+        # warm-up frames without alpha contribute confidence-filtered only
+        if alpha is not None:
+            ms = m & (np.asarray(alpha, dtype=np.float32).squeeze().reshape(-1) >= alpha_static_thr)
+        else:
+            ms = m
+        all_pts_static.append(world[ms])
+        all_cols_static.append((color.reshape(-1, 3)[ms] * 255).astype(np.uint8))
 
     np.save(os.path.join(outdir, "poses_c2w.npy"), poses_c2w)
     # TUM-style trajectory: frame tx ty tz (rotation kept in poses_c2w.npy / camera/*.npz)
@@ -212,10 +226,20 @@ def save_results(outputs, outdir, conf_thr, max_ply_points):
         pts, cols = pts[sel], cols[sel]
     write_ply(os.path.join(outdir, "pointcloud.ply"), pts, cols)
 
+    # [george] Mode-2 alpha-filtered static cloud (HANDOFF §7)
+    pts_s = np.concatenate(all_pts_static, 0) if all_pts_static else np.zeros((0, 3), np.float32)
+    cols_s = np.concatenate(all_cols_static, 0) if all_cols_static else np.zeros((0, 3), np.uint8)
+    if len(pts_s) > max_ply_points:
+        sel = np.random.choice(len(pts_s), max_ply_points, replace=False)
+        pts_s, cols_s = pts_s[sel], cols_s[sel]
+    write_ply(os.path.join(outdir, "pointcloud_static.ply"), pts_s, cols_s)
+
     alpha_saved = len(os.listdir(os.path.join(outdir, "alpha")))  # [george]
     return {"num_frames": n, "height": H, "width": W,
             "mean_conf": float(conf_self.mean()), "ply_points": int(len(pts)),
-            "alpha_frames": alpha_saved}
+            "alpha_frames": alpha_saved,
+            "ply_points_static": int(len(pts_s)),
+            "alpha_static_thr": alpha_static_thr}
 
 
 def write_ply(path, pts, cols):
@@ -266,7 +290,8 @@ def main():
     fps = len(views) / dt if dt > 0 else float("nan")
     print(f"[info] inference done: {dt:.2f}s, {fps:.2f} FPS")
 
-    summary = save_results(outputs, args.output_dir, args.conf_thr, args.max_ply_points)
+    summary = save_results(outputs, args.output_dir, args.conf_thr, args.max_ply_points,
+                           alpha_static_thr=args.alpha_static_thr)
     summary.update({
         "frames": len(img_paths), "seconds": round(dt, 2), "fps": round(fps, 2),
         "model_update_type": args.model_update_type,
