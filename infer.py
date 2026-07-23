@@ -67,7 +67,15 @@ def parse_args():
                    help="Take every k-th frame.")
     p.add_argument("--model_update_type", type=str, default="cut3r",
                    choices=["cut3r", "xattn"],
-                   help="cut3r = no gating baseline; xattn = attention gate + RayMap3R alpha gate.")
+                   help="cut3r = no gating baseline; xattn = attention gate + RayMap3R alpha gate. "
+                        "NOTE: has no effect on the recurrent path (the rotation router overrides "
+                        "it); use --force_update_type instead.")
+    # [george] A/B switch that actually works on the recurrent path (bypasses the router)
+    p.add_argument("--force_update_type", type=str, default="auto",
+                   choices=["auto", "cut3r", "xattn"],
+                   help="auto = paper behavior (adaptive rotation router decides). "
+                        "xattn = force gated regime from frame 0. "
+                        "cut3r = force TRUE vanilla baseline (update rule cut3r AND alpha gate off).")
     p.add_argument("--reset_interval", type=int, default=50,
                    help="Memory reset period in frames (paper default = 50; reset metric "
                         "alignment is applied at each boundary). Set huge to disable.")
@@ -159,7 +167,8 @@ def save_results(outputs, outdir, conf_thr, max_ply_points):
     pp = torch.tensor([W // 2, H // 2]).float().repeat(B, 1)
     focal = estimate_focal_knowing_depth(pts_self, pp, focal_mode="weiszfeld")
 
-    for sub in ("depth", "conf", "color", "camera"):
+    # [george] "alpha" holds per-pixel staticness maps (absent for the first warm-up frames)
+    for sub in ("depth", "conf", "color", "camera", "alpha"):
         d = os.path.join(outdir, sub)
         shutil.rmtree(d, ignore_errors=True)
         os.makedirs(d, exist_ok=True)
@@ -178,6 +187,11 @@ def save_results(outputs, outdir, conf_thr, max_ply_points):
         np.save(os.path.join(outdir, "conf", f"{i:06d}.npy"), conf)
         iio.imwrite(os.path.join(outdir, "color", f"{i:06d}.png"), (color * 255).astype(np.uint8))
         np.savez(os.path.join(outdir, "camera", f"{i:06d}.npz"), pose=c2w, intrinsics=K)
+        # [george] per-pixel staticness in [0,1]; (B,1,H,W) -> (H,W)
+        alpha = preds[i].get("alpha_img", None)
+        if alpha is not None:
+            np.save(os.path.join(outdir, "alpha", f"{i:06d}.npy"),
+                    np.asarray(alpha, dtype=np.float32).squeeze())
 
         world = geotrf(poses[i], pts_self[i].unsqueeze(0))[0].numpy().reshape(-1, 3)
         m = (conf.reshape(-1) > conf_thr)
@@ -198,8 +212,10 @@ def save_results(outputs, outdir, conf_thr, max_ply_points):
         pts, cols = pts[sel], cols[sel]
     write_ply(os.path.join(outdir, "pointcloud.ply"), pts, cols)
 
+    alpha_saved = len(os.listdir(os.path.join(outdir, "alpha")))  # [george]
     return {"num_frames": n, "height": H, "width": W,
-            "mean_conf": float(conf_self.mean()), "ply_points": int(len(pts))}
+            "mean_conf": float(conf_self.mean()), "ply_points": int(len(pts)),
+            "alpha_frames": alpha_saved}
 
 
 def write_ply(path, pts, cols):
@@ -240,6 +256,7 @@ def main():
     print(f"[info] loading model from {args.weights}")
     model = ARCroco3DStereo.from_pretrained(args.weights).to(device)
     model.config.model_update_type = args.model_update_type
+    model.force_update_type = args.force_update_type  # [george] router bypass, see parse_args
     model.eval()
 
     t0 = time.time()
@@ -253,6 +270,8 @@ def main():
     summary.update({
         "frames": len(img_paths), "seconds": round(dt, 2), "fps": round(fps, 2),
         "model_update_type": args.model_update_type,
+        "force_update_type": args.force_update_type,         # [george]
+        "router": getattr(model, "last_router_info", None),  # [george] actual regime used
         "weights": os.path.abspath(args.weights),
         "source": args.frames_dir or args.video,
     })

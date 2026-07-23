@@ -37,7 +37,8 @@ RayMap3R (CUT3R fork, training-free) 上做 **instance-level scene-state mainten
 
 | 位置 | 內容 |
 |------|------|
-| `src/dust3r/model.py` `_compute_alpha_state_from_static`(約 line 986-1070) | per-pixel dynamic map:`alpha_img = sigmoid(scale * (tau - delta))`,(B,1,H,W),目前算了但沒存 |
+| `src/dust3r/model.py` `_compute_alpha_state_from_static`(約 line 986-1070) | per-pixel dynamic map:`alpha_img = sigmoid(scale * (tau - delta))`,(B,1,H,W)。**已存檔**:`infer.py` 輸出 `alpha/*.npy`(前 5 warm-up frames 沒有);注意原始值擠在窄帶(lady-running 上 1-alpha ≈ 0.71-0.78),要用相對值 |
+| `infer.py` `--force_update_type`(Day-2 patch) | `auto`=paper 行為(router 決定);`xattn`=從 frame 0 強制 gated;`cut3r`=真 vanilla baseline(update rule + alpha gate 全關)。gate A/B 用這個,別用 `--model_update_type` |
 | `src/dust3r/model.py` 約 line 326-331 | gate 超參數預設值(alpha_gate_lambda=0.9, alpha_gate_wmin=0.15, alpha_ema_tau=5.0, coverage_adapt_k=0.5, small_step_c=0.5) |
 | `src/dust3r/model.py` line 4 | dev comment:gate 對 depth 較好、**對 pose 較差** — registration 吃 pose,要驗證 gate on/off 的 pose 品質 |
 | `infer.py` / `src/dust3r/inference.py` `inference_recurrent_lighter` | recurrent inference 主路徑;alpha_img 要從這裡 thread 出去存檔 |

@@ -40,3 +40,40 @@ Sanity: `torch 2.1.1+cu121 | cuda: True | NVIDIA GeForce RTX 4090`; checkpoint `
   the Day-2 alpha dump is mostly a `save_results` addition, not inference plumbing.
 - Day-1 exit criterion MET: fused `pointcloud.ply` + per-frame `depth/ conf/ color/ camera/`
   + `poses_c2w.npy` + `trajectory.txt` + `summary.json` exist and load correctly.
+
+## 2026-07-22 — Day 2: alpha dump + forced-regime patch + heatmap
+
+### Code changes (commit refs in git; [george] block markers inside inherited files)
+
+- `src/dust3r/model.py`: forced-regime bypass of the rotation router (`model.force_update_type`),
+  router decision logging + `last_router_info`; forced `cut3r` also disables `_apply_alpha_gate`
+  (a router-decided cut3r regime would still apply it, which is not a clean baseline).
+- `infer.py`: `--force_update_type {auto,cut3r,xattn}` (note: old `--model_update_type` is a no-op
+  on this path), saves `alpha/{i:06d}.npy` per frame, `summary.json` gains `alpha_frames`,
+  `force_update_type`, `router`.
+- `scripts/make_alpha_video.py` (new): `[RGB | 1-alpha heatmap]` overlay video + sample pngs,
+  `--normalize` = per-frame p5-p95 stretch.
+
+### Runs (lady-running.mp4, 65 frames)
+
+| # | command | output dir | result |
+|---|---------|-----------|--------|
+| 4 | `python infer.py --video data/examples/lady-running.mp4 --output_dir results/lady_full_force_auto --num_frames 0 --force_update_type auto` | `results/lady_full_force_auto` | router decided **xattn** at frame 20, median_rot **1.79 deg/frame** (threshold 2.0); 60/65 alpha frames (first 5 = warm-up, none); bit-identical to Day-1 runs (patch = zero regression in auto) |
+| 5 | same with `--force_update_type xattn` | `results/lady_full_force_xattn` | gated regime from frame 0 |
+| 6 | same with `--force_update_type cut3r` | `results/lady_full_force_cut3r` | true vanilla baseline (alpha gate off) |
+
+### Findings
+
+- **A/B switch works**: forced xattn vs forced cut3r differ substantially
+  (pose max translation diff 2.36, depth max diff 1.32 at frame 40).
+  Day-1 mystery explained: the router picks xattn on lady-running (1.79 < 2.0), so both
+  old flag values landed in the same regime.
+- **alpha map baseline is high and narrow**: mean(1-alpha) in 0.708-0.782 across frames.
+  Absolute values are NOT directly usable as motion probability. With per-frame p5-p95
+  normalization the structure is clean: runner + moving people hot, floor/static background cold;
+  static furniture edges stay warm (depth-uncertain boundaries).
+  -> For Day 4 per-instance aggregation, use RELATIVE scores (per-frame normalized or
+  scene-median-relative), not absolute thresholds.
+- Videos: `results/lady_full_force_auto/alpha_heatmap.mp4` (raw) and `alpha_heatmap_norm.mp4`
+  (normalized; recommended for eyeballing).
+- **Day-2 exit criterion MET** (normalized heatmap is a plausible motion map).

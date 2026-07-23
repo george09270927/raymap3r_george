@@ -1672,6 +1672,24 @@ class ARCroco3DStereo(CroCoNet):
         self._router_rot = []
         self._router_prev_c2w = None
         self.config.model_update_type = "cut3r"  # warm-up base: unconditional CUT3R update
+        # --- [george] forced-regime patch begin: bypass the adaptive router for A/B runs.
+        # Set via `model.force_update_type` ("auto"|"cut3r"|"xattn", see infer.py flag).
+        # "xattn"  -> gated regime fixed from frame 0 (alpha gate + smoothing active).
+        # "cut3r"  -> TRUE vanilla baseline: cut3r update rule AND alpha gate disabled
+        #             (a router-decided cut3r regime would still apply _apply_alpha_gate,
+        #             so regime forcing alone is NOT a clean gate-off baseline).
+        self.last_router_info = None
+        self._force_no_alpha = False
+        _force = str(getattr(self, "force_update_type", "auto"))
+        if _force in ("cut3r", "xattn"):
+            self.config.model_update_type = _force
+            self._router_S = (_force == "xattn")
+            self._router_decided = True
+            self._force_no_alpha = (_force == "cut3r")
+            self.last_router_info = {"forced": _force, "regime": _force,
+                                     "median_rot_deg": None, "decided_at_frame": 0}
+            print(f"[router] forced regime={_force} (adaptive router bypassed)")
+        # --- [george] forced-regime patch end ---
         def _sig(x):
             return float(1.0 / (1.0 + np.exp(-np.clip(x, -30, 30))))
         for i, _view in enumerate(views):
@@ -1907,6 +1925,13 @@ class ARCroco3DStereo(CroCoNet):
                             else:
                                 self.config.model_update_type = "cut3r"; self._router_S = False
                             self._router_decided = True
+                            # --- [george] record + log the router decision ---
+                            self.last_router_info = {
+                                "forced": "auto", "regime": self.config.model_update_type,
+                                "median_rot_deg": round(_rotmed, 3), "decided_at_frame": i}
+                            print(f"[router] decided regime={self.config.model_update_type} "
+                                  f"(median_rot={_rotmed:.2f} deg/frame, frame {i})")
+                            # --- [george] end ---
                     except Exception:
                         pass
                 # update mem: static-branch pose token + static-weighted global key
@@ -1965,7 +1990,8 @@ class ARCroco3DStereo(CroCoNet):
                     raise ValueError(f"Invalid model type: {self.config.model_update_type}")
 
             # apply per-state staticness gating (Sec 3.3), enabled once the router has decided
-            _do_alpha = bool(self._router_decided)
+            # [george] _force_no_alpha: forced cut3r baseline disables the alpha gate entirely
+            _do_alpha = bool(self._router_decided) and not getattr(self, "_force_no_alpha", False)
             if i > warmup_frames and _do_alpha:
                 update_mask1 = self._apply_alpha_gate(update_mask1, res, view, i)
 
